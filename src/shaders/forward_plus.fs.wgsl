@@ -38,27 +38,8 @@ fn main(in: FragmentInput) -> @location(0) vec4f
         discard;
     }
 
-
     let viewPos = (cameraUniforms.viewMat * vec4f(in.pos, 1)).xyz;
-    let depth = -viewPos.z;
-
-    // return vec4f(viewPos, 1);
-
-    let nClustersByDim = vec3u(${nClustersX}, ${nClustersY}, ${nClustersZ});
-
-    let minZ = f32(${nearPlaneZ});
-    let maxZ = f32(${farPlaneZ});
-    let nClusterZ = u32(f32(nClustersByDim.z) * (depth - minZ) / (maxZ - minZ));
-
-
-
-    let screenDims = cameraUniforms.screenDims;
-    let clusterSize = screenDims / vec2f(nClustersByDim.xy);
-    let nCluster = vec3u(
-        u32(in.fragCoord.x / clusterSize.x),
-        u32(in.fragCoord.y / clusterSize.y),
-        nClusterZ,
-    );
+    let nCluster = getNCluster(-viewPos.z, in.fragCoord, cameraUniforms.screenDims);
     
     if nCluster.x >= nClustersByDim.x || nCluster.y >= nClustersByDim.y || nCluster.z >= nClustersByDim.z {
         return vec4(0, 0, 0, 1);

@@ -13,8 +13,13 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
     clusterPipeline: GPUComputePipeline;
     renderPipeline: GPURenderPipeline;
+    gBufferPipeline: GPURenderPipeline;
 
     clusterBuffer: GPUBuffer;
+    gBuffer: GPUBuffer;
+    vertBuffer: GPUBuffer;
+
+    timeBuffer: GPUBuffer;
 
     constructor(stage: Stage) {
         super(stage);
@@ -27,6 +32,20 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             label: "clusters buffer",
             size: nClusters * Math.ceil((4 + shaders.constants.nMaxLightsPerCluster * 4) / 16) * 16,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+
+
+        this.gBuffer = renderer.device.createBuffer({
+            label: "gbuffer",
+            size: renderer.canvas.width * renderer.canvas.height * 48,
+            usage: GPUBufferUsage.STORAGE,
+        });
+
+
+        this.timeBuffer = renderer.device.createBuffer({
+            label: "time buffer",
+            size: 4,
+            usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST,
         });
 
         this.sceneUniformsBindGroupLayout = renderer.device.createBindGroupLayout({
@@ -51,6 +70,18 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     buffer: { type: "storage" },
                 },
+
+                {
+                    binding: 3,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" },
+                },
+
+                {
+                    binding: 4,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    buffer: { type: "uniform" },
+                },
             ]
         });
 
@@ -69,6 +100,14 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 {
                     binding: 2,
                     resource: { buffer: this.clusterBuffer },
+                },
+                {
+                    binding: 3,
+                    resource: { buffer: this.gBuffer },
+                },
+                {
+                    binding: 4,
+                    resource: { buffer: this.timeBuffer },
                 },
             ]
         });
@@ -96,9 +135,9 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             },
         });
 
-        this.renderPipeline = renderer.device.createRenderPipeline({
+        this.gBufferPipeline = renderer.device.createRenderPipeline({
             layout: renderer.device.createPipelineLayout({
-                label: "deferred pipeline layout",
+                label: "deferred gbuffer pipeline layout",
                 bindGroupLayouts: [
                     this.sceneUniformsBindGroupLayout,
                     renderer.modelBindGroupLayout,
@@ -112,15 +151,15 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             },
             vertex: {
                 module: renderer.device.createShaderModule({
-                    label: "forward+ vert shader",
+                    label: "deferred vert shader",
                     code: shaders.naiveVertSrc
                 }),
                 buffers: [ renderer.vertexBufferLayout ]
             },
             fragment: {
                 module: renderer.device.createShaderModule({
-                    label: "forward+ frag shader",
-                    code: shaders.forwardPlusFragSrc,
+                    label: "deferred frag shader",
+                    code: shaders.clusteredDeferredFragSrc,
                 }),
                 targets: [
                     {
@@ -129,17 +168,104 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                 ]
             }
         });
+
+        this.renderPipeline = renderer.device.createRenderPipeline({
+            layout: renderer.device.createPipelineLayout({
+                label: "deferred fullscreen pipeline layout",
+                bindGroupLayouts: [
+                    this.sceneUniformsBindGroupLayout,
+                ]
+            }),
+            vertex: {
+                module: renderer.device.createShaderModule({
+                    label: "deferred fullscreen vert shader",
+                    code: shaders.clusteredDeferredFullscreenVertSrc
+                }),
+                buffers: [{
+                    arrayStride: 8,
+                    attributes: [
+                        { // pos
+                            format: "float32x2",
+                            offset: 0,
+                            shaderLocation: 0
+                        },
+                    ],
+                }],
+            },
+            fragment: {
+                module: renderer.device.createShaderModule({
+                    label: "deferred fullscreen frag shader",
+                    code: shaders.clusteredDeferredFullscreenFragSrc,
+                }),
+                targets: [
+                    {
+                        format: renderer.canvasFormat,
+                    }
+                ]
+            }
+        });
+
+        this.vertBuffer = renderer.device.createBuffer({
+            label: "fullscreen quad vbuffer",
+            usage: GPUBufferUsage.VERTEX | GPUBufferUsage.COPY_DST,
+            size: 48,
+        });
+
+        renderer.device.queue.writeBuffer(this.vertBuffer, 0, new Float32Array([
+            -1, -1,
+            -1, 1,
+            1, -1,
+            
+            -1, 1,
+            1, -1,
+            1, 1,
+        ]));
     }
 
     override draw() {
-        // TODO-3: run the Forward+ rendering pass:
-        // - run the clustering compute shader
+        // TODO-3: run the Clustered Deferred rendering pass:
         // - run the G-buffer pass, outputting position, albedo, and normals
+        // - run the clustering compute shader
         // - run the fullscreen pass, which reads from the G-buffer and performs lighting calculations
+
+        renderer.device.queue.writeBuffer(this.timeBuffer, 0, new Uint32Array([Date.now()]));
+
         const encoder = renderer.device.createCommandEncoder();
         const canvasTextureView = renderer.context.getCurrentTexture().createView();
 
+        const gBufferPass = encoder.beginRenderPass({
+            label: "deferred gbuffer pass",
+            colorAttachments: [
+                {
+                    view: canvasTextureView,
+                    clearValue: [0, 0, 0, 0],
+                    loadOp: "clear",
+                    storeOp: "discard",
+                }
+            ],
+            depthStencilAttachment: {
+                view: this.depthTextureView,
+                depthClearValue: 1.0,
+                depthLoadOp: "clear",
+                depthStoreOp: "store"
+            }
+        });
+        gBufferPass.setPipeline(this.gBufferPipeline);
+        gBufferPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
 
+        this.scene.iterate(node => {
+            gBufferPass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
+        }, material => {
+            gBufferPass.setBindGroup(shaders.constants.bindGroup_material, material.materialBindGroup);
+        }, primitive => {
+            gBufferPass.setVertexBuffer(0, primitive.vertexBuffer);
+            gBufferPass.setIndexBuffer(primitive.indexBuffer, 'uint32');
+            gBufferPass.drawIndexed(primitive.numIndices);
+        });
+
+        gBufferPass.end();
+
+        // Clustering pass: assign lights to clusters
         const computePass = encoder.beginComputePass({
             label: "deferred clustering pass",
         });
@@ -152,9 +278,9 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         computePass.end();
 
-
+        // Fullscreen pass: read G-buffer and compute lighting
         const renderPass = encoder.beginRenderPass({
-            label: "deferred render pass",
+            label: "deferred fullscreen render pass",
             colorAttachments: [
                 {
                     view: canvasTextureView,
@@ -162,27 +288,12 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     loadOp: "clear",
                     storeOp: "store"
                 }
-            ],
-            depthStencilAttachment: {
-                view: this.depthTextureView,
-                depthClearValue: 1.0,
-                depthLoadOp: "clear",
-                depthStoreOp: "store"
-            }
+            ]
         });
         renderPass.setPipeline(this.renderPipeline);
-
         renderPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
-
-        this.scene.iterate(node => {
-            renderPass.setBindGroup(shaders.constants.bindGroup_model, node.modelBindGroup);
-        }, material => {
-            renderPass.setBindGroup(shaders.constants.bindGroup_material, material.materialBindGroup);
-        }, primitive => {
-            renderPass.setVertexBuffer(0, primitive.vertexBuffer);
-            renderPass.setIndexBuffer(primitive.indexBuffer, 'uint32');
-            renderPass.drawIndexed(primitive.numIndices);
-        });
+        renderPass.setVertexBuffer(0, this.vertBuffer);
+        renderPass.draw(6);
 
         renderPass.end();
 

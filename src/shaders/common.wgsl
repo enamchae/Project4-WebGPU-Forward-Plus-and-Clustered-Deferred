@@ -30,6 +30,16 @@ struct ClusterSet {
     clusters: array<Cluster>,
 }
 
+struct GPixel {
+    diffuse: vec4f,
+    pos: vec3f,
+    depth: f32,
+    normal: vec3f,
+    lastWriteTime: u32,
+}
+
+const nClustersByDim = vec3u(${nClustersX}, ${nClustersY}, ${nClustersZ});
+
 // CHECKITOUT: this special attenuation function ensures lights don't affect geometry outside the maximum light radius
 fn rangeAttenuation(distance: f32) -> f32 {
     return clamp(1.f - pow(distance / ${lightRadius}, 4.f), 0.f, 1.f) / (distance * distance);
@@ -41,4 +51,20 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
 
     let lambert = max(dot(nor, normalize(vecToLight)), 0.f);
     return light.color * lambert * rangeAttenuation(distToLight);
+}
+
+
+fn getNCluster(depth: f32, fragCoord: vec4f, screenDims: vec2f) -> vec3u {
+    let minZ = f32(${nearPlaneZ});
+    let maxZ = f32(${farPlaneZ});
+    let nClusterZ = u32(f32(nClustersByDim.z) * (depth - minZ) / (maxZ - minZ));
+
+
+
+    let clusterSize = screenDims / vec2f(nClustersByDim.xy);
+    return vec3u(
+        u32(fragCoord.x / clusterSize.x),
+        u32(fragCoord.y / clusterSize.y),
+        nClusterZ,
+    );
 }
