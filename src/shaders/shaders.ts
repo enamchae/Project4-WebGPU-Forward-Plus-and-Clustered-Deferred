@@ -37,6 +37,8 @@ export const constants = {
 
     nearPlaneZ: 0.01,
     farPlaneZ: 25,
+
+    fovY: 45,
 };
 
 // =================================

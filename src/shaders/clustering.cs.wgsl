@@ -40,34 +40,44 @@ fn clusterLights(@builtin(global_invocation_id) globalId: vec3u) {
     if threadIndex >= nClustersByDim.x * nClustersByDim.y * nClustersByDim.z { return; }
 
 
-    let clusterSize = cameraUniforms.screenDims / vec2f(nClustersByDim.xy);
 
     let nClusterZ = threadIndex / (nClustersByDim.x * nClustersByDim.y);
     let nClusterY = (threadIndex % (nClustersByDim.x * nClustersByDim.y)) / nClustersByDim.x;
     let nClusterX = threadIndex % nClustersByDim.x;
     
 
-    
+
     let minZ = f32(${nearPlaneZ});
     let maxZ = f32(${farPlaneZ});
     let clipRange = maxZ - minZ;
     
-
     let frustumMinZ = minZ + f32(nClusterZ) * clipRange / f32(nClustersByDim.z);
     let frustumMaxZ = minZ + f32(nClusterZ + 1) * clipRange / f32(nClustersByDim.z);
 
-    let frustumMinXyScreen = vec2f(vec2u(nClusterX, nClusterY)) * clusterSize / cameraUniforms.screenDims * 2 - 1;
-    let frustumMaxXyScreen = vec2f(vec2u(nClusterX + 1, nClusterY + 1)) * clusterSize / cameraUniforms.screenDims * 2 - 1;
+
+
+    let clusterSize = cameraUniforms.screenDims / vec2f(nClustersByDim.xy);
+
+    // y and z have to be flipped
+    var frustumMinXyUnitSquare = vec2f(vec2u(nClusterX, nClusterY + 1)) * clusterSize / cameraUniforms.screenDims * 2 - 1;
+    var frustumMaxXyUnitSquare = vec2f(vec2u(nClusterX + 1, nClusterY)) * clusterSize / cameraUniforms.screenDims * 2 - 1;
+    frustumMinXyUnitSquare.y *= -1;
+    frustumMaxXyUnitSquare.y *= -1;
+
+    let fovScaleFac = tan(radians(f32(${fovY}) / 2));
+    let aspect = cameraUniforms.screenDims.x / cameraUniforms.screenDims.y;
+
+
 
     let boxMin = vec3f(
-        min(frustumMinXyScreen.x * frustumMinZ, frustumMinXyScreen.x * frustumMaxZ),
-        min(frustumMinXyScreen.y * frustumMinZ, frustumMinXyScreen.y * frustumMaxZ),
-        frustumMinZ,
+        min(frustumMinXyUnitSquare.x * frustumMinZ, frustumMinXyUnitSquare.x * frustumMaxZ) * fovScaleFac * aspect,
+        min(frustumMinXyUnitSquare.y * frustumMinZ, frustumMinXyUnitSquare.y * frustumMaxZ) * fovScaleFac,
+        -frustumMaxZ,
     );
     let boxMax = vec3f(
-        min(frustumMaxXyScreen.x * frustumMinZ, frustumMaxXyScreen.x * frustumMaxZ),
-        min(frustumMaxXyScreen.y * frustumMinZ, frustumMaxXyScreen.y * frustumMaxZ),
-        frustumMaxZ,
+        max(frustumMaxXyUnitSquare.x * frustumMinZ, frustumMaxXyUnitSquare.x * frustumMaxZ) * fovScaleFac * aspect,
+        max(frustumMaxXyUnitSquare.y * frustumMinZ, frustumMaxXyUnitSquare.y * frustumMaxZ) * fovScaleFac,
+        -frustumMinZ,
     );
 
 
@@ -75,9 +85,8 @@ fn clusterLights(@builtin(global_invocation_id) globalId: vec3u) {
     for (var lightIndex = 0u; lightIndex < lightSet.numLights; lightIndex++) {
         let light = lightSet.lights[lightIndex];
         
-        var lightViewPos = (cameraUniforms.viewMat * vec4f(light.pos, 1)).xyz;
-        lightViewPos.z *= -1;
-        if !sphereIntersectsBox(lightViewPos, ${lightRadius}, boxMin, boxMax) { continue; }
+        let lightCameraPos = (cameraUniforms.viewMat * vec4f(light.pos, 1)).xyz;
+        if !sphereIntersectsBox(lightCameraPos, ${lightRadius}, boxMin, boxMax) { continue; }
 
         clusterSet.clusters[threadIndex].lightIndices[nLights] = lightIndex;
         nLights++;

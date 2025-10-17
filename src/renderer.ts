@@ -2,6 +2,7 @@ import { Scene } from './stage/scene';
 import { Lights } from './stage/lights';
 import { Camera } from './stage/camera';
 import { Stage } from './stage/stage';
+import { constants } from './shaders/shaders';
 
 export var canvas: HTMLCanvasElement;
 export var canvasFormat: GPUTextureFormat;
@@ -10,7 +11,7 @@ export var device: GPUDevice;
 export var canvasTextureView: GPUTextureView;
 
 export var aspectRatio: number;
-export const fovYDegrees = 45;
+export const fovYDegrees = constants.fovY;
 
 export var modelBindGroupLayout: GPUBindGroupLayout;
 export var materialBindGroupLayout: GPUBindGroupLayout;
