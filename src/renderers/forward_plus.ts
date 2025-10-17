@@ -2,11 +2,6 @@ import * as renderer from '../renderer';
 import * as shaders from '../shaders/shaders';
 import { Stage } from '../stage/stage';
 
-
-const N_CLUSTERS_X = 2;
-const N_CLUSTERS_Y = 2;
-const N_CLUSTERS_Z = 2;
-
 export class ForwardPlusRenderer extends renderer.Renderer {
     // TODO-2: add layouts, pipelines, textures, etc. needed for Forward+ here
     // you may need extra uniforms such as the camera view matrix and the canvas resolution
@@ -16,18 +11,29 @@ export class ForwardPlusRenderer extends renderer.Renderer {
     depthTexture: GPUTexture;
     depthTextureView: GPUTextureView;
 
-    pipeline: GPURenderPipeline;
+    clusterPipeline: GPUComputePipeline;
+    renderPipeline: GPURenderPipeline;
+
+    clusterBuffer: GPUBuffer;
 
     constructor(stage: Stage) {
         super(stage);
 
         // TODO-2: initialize layouts, pipelines, textures, etc. needed for Forward+ here
+        const nClusters = shaders.constants.nClustersByDim[0] * shaders.constants.nClustersByDim[1] * shaders.constants.nClustersByDim[2];
+        
+        this.clusterBuffer = renderer.device.createBuffer({
+            label: "clusters buffer",
+            size: nClusters * Math.ceil((4 + shaders.constants.nMaxLightsPerCluster * 4) / 16) * 16,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
+        });
+
         this.sceneUniformsBindGroupLayout = renderer.device.createBindGroupLayout({
-            label: "scene uniforms bind group layout",
+            label: "forward+ scene uniforms bind group layout",
             entries: [
                 {
                     binding: 0,
-                    visibility: GPUShaderStage.VERTEX,
+                    visibility: GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
                     buffer: {
                         type: "uniform",
                     },
@@ -35,8 +41,14 @@ export class ForwardPlusRenderer extends renderer.Renderer {
 
                 { // lightSet
                     binding: 1,
-                    visibility: GPUShaderStage.FRAGMENT,
-                    buffer: { type: "read-only-storage" }
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    buffer: { type: "read-only-storage" },
+                },
+
+                {
+                    binding: 2,
+                    visibility: GPUShaderStage.FRAGMENT | GPUShaderStage.COMPUTE,
+                    buffer: { type: "storage" },
                 },
             ]
         });
@@ -49,11 +61,14 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                     binding: 0,
                     resource: {buffer: this.camera.uniformsBuffer},
                 },
-
                 {
                     binding: 1,
-                    resource: { buffer: this.lights.lightSetStorageBuffer }
-                }
+                    resource: { buffer: this.lights.lightSetStorageBuffer },
+                },
+                {
+                    binding: 2,
+                    resource: { buffer: this.clusterBuffer },
+                },
             ]
         });
 
@@ -64,9 +79,25 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         });
         this.depthTextureView = this.depthTexture.createView();
 
-        this.pipeline = renderer.device.createRenderPipeline({
+        this.clusterPipeline = renderer.device.createComputePipeline({
             layout: renderer.device.createPipelineLayout({
-                label: "naive pipeline layout",
+                label: "foward+ cluster pipeline layout",
+                bindGroupLayouts: [
+                    this.sceneUniformsBindGroupLayout,
+                ],
+            }),
+            compute: {
+                module: renderer.device.createShaderModule({
+                    label: "forward+ clustering module",
+                    code: shaders.clusteringComputeSrc,
+                }),
+                entryPoint: "clusterLights",
+            },
+        });
+
+        this.renderPipeline = renderer.device.createRenderPipeline({
+            layout: renderer.device.createPipelineLayout({
+                label: "forward+ pipeline layout",
                 bindGroupLayouts: [
                     this.sceneUniformsBindGroupLayout,
                     renderer.modelBindGroupLayout,
@@ -106,8 +137,22 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         const encoder = renderer.device.createCommandEncoder();
         const canvasTextureView = renderer.context.getCurrentTexture().createView();
 
+
+        const computePass = encoder.beginComputePass({
+            label: "forward+ clustering pass",
+        });
+        computePass.setPipeline(this.clusterPipeline);
+        computePass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
+        
+        const totalClusters = shaders.constants.nClustersByDim[0] * shaders.constants.nClustersByDim[1] * shaders.constants.nClustersByDim[2];
+        const workgroupCount = Math.ceil(totalClusters / shaders.constants.clusterWorkgroupSize);
+        computePass.dispatchWorkgroups(workgroupCount);
+
+        computePass.end();
+
+
         const renderPass = encoder.beginRenderPass({
-            label: "naive render pass",
+            label: "forward+ render pass",
             colorAttachments: [
                 {
                     view: canvasTextureView,
@@ -123,7 +168,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
                 depthStoreOp: "store"
             }
         });
-        renderPass.setPipeline(this.pipeline);
+        renderPass.setPipeline(this.renderPipeline);
 
         renderPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
 
