@@ -8,9 +8,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
     sceneUniformsBindGroupLayout: GPUBindGroupLayout;
     sceneUniformsBindGroup: GPUBindGroup;
 
-    depthTexture: GPUTexture;
-    depthTextureView: GPUTextureView;
-
     clusterPipeline: GPUComputePipeline;
     renderPipeline: GPURenderPipeline;
     gBufferPipeline: GPURenderPipeline;
@@ -40,7 +37,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             size: renderer.canvas.width * renderer.canvas.height * 48,
             usage: GPUBufferUsage.STORAGE,
         });
-
 
         this.timeBuffer = renderer.device.createBuffer({
             label: "time buffer",
@@ -112,13 +108,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
             ]
         });
 
-        this.depthTexture = renderer.device.createTexture({
-            size: [renderer.canvas.width, renderer.canvas.height],
-            format: "depth24plus",
-            usage: GPUTextureUsage.RENDER_ATTACHMENT
-        });
-        this.depthTextureView = this.depthTexture.createView();
-
         this.clusterPipeline = renderer.device.createComputePipeline({
             layout: renderer.device.createPipelineLayout({
                 label: "deferred cluster pipeline layout",
@@ -144,11 +133,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     renderer.materialBindGroupLayout
                 ]
             }),
-            depthStencil: {
-                depthWriteEnabled: true,
-                depthCompare: "less",
-                format: "depth24plus"
-            },
             vertex: {
                 module: renderer.device.createShaderModule({
                     label: "deferred vert shader",
@@ -232,7 +216,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         const encoder = renderer.device.createCommandEncoder();
         const canvasTextureView = renderer.context.getCurrentTexture().createView();
-
+        
         const gBufferPass = encoder.beginRenderPass({
             label: "deferred gbuffer pass",
             colorAttachments: [
@@ -243,12 +227,6 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
                     storeOp: "discard",
                 }
             ],
-            depthStencilAttachment: {
-                view: this.depthTextureView,
-                depthClearValue: 1.0,
-                depthLoadOp: "clear",
-                depthStoreOp: "store"
-            }
         });
         gBufferPass.setPipeline(this.gBufferPipeline);
         gBufferPass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
@@ -265,7 +243,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         gBufferPass.end();
 
-        // Clustering pass: assign lights to clusters
+
         const computePass = encoder.beginComputePass({
             label: "deferred clustering pass",
         });
@@ -278,7 +256,7 @@ export class ClusteredDeferredRenderer extends renderer.Renderer {
 
         computePass.end();
 
-        // Fullscreen pass: read G-buffer and compute lighting
+
         const renderPass = encoder.beginRenderPass({
             label: "deferred fullscreen render pass",
             colorAttachments: [
