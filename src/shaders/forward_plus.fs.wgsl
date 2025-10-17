@@ -34,18 +34,20 @@ struct FragmentInput
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
     let diffuseColor = textureSample(diffuseTex, diffuseTexSampler, in.uv);
-    if diffuseColor.a < 0.5f { discard; }
 
 
-    let viewPos = (cameraUniforms.viewMat * vec4f(in.pos, 1.0)).xyz;
+    let viewPos = (cameraUniforms.viewMat * vec4f(in.pos, 1)).xyz;
     let depth = -viewPos.z;
+
+    // return vec4f(viewPos, 1);
 
     let nClustersByDim = vec3u(${nClustersByDim[0]}, ${nClustersByDim[1]}, ${nClustersByDim[2]});
 
 
-    let minZ = 0.1;
-    let maxZ = 100.;
+    let minZ = f32(${nearPlaneZ});
+    let maxZ = f32(${farPlaneZ});
     let nClusterZ = u32(f32(nClustersByDim.z) * (depth - minZ) / (maxZ - minZ));
+
 
 
     let screenDims = cameraUniforms.screenDims;
@@ -64,11 +66,15 @@ fn main(in: FragmentInput) -> @location(0) vec4f
     let cluster = clusterSet.clusters[clusterIndex];
     
 
+    // return vec4(vec3f(nCluster) / vec3f(nClustersByDim), 1);
+
+    // return vec4(f32(clusterIndex) / f32(nClustersByDim.x * nClustersByDim.y * nClustersByDim.z) * vec3f(1, 1, 1), 1);
+
+    // return vec4(f32(cluster.nLights) / f32(${nMaxLightsPerCluster}) * vec3f(1, 1, 1), 1);
+
     var lightCol = vec3f(0, 0, 0);
     for (var i = 0u; i < cluster.nLights; i++) {
-        let lightIndex = cluster.lightIndices[i];
-        let light = lightSet.lights[lightIndex];
-        lightCol += calculateLightContrib(light, in.pos, normalize(in.nor));
+        lightCol += calculateLightContrib(lightSet.lights[cluster.lightIndices[i]], in.pos, normalize(in.nor));
     }
     // for (var i = 0u; i < lightSet.numLights; i++) {
     //     lightCol += calculateLightContrib(lightSet.lights[i], in.pos, normalize(in.nor));

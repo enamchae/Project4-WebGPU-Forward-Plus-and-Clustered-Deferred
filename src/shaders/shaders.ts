@@ -32,8 +32,11 @@ export const constants = {
     clusterWorkgroupSize: 256,
 
     lightRadius: 2,
-    nMaxLightsPerCluster: 256,
-    nClustersByDim: [16, 9, 24],
+    nMaxLightsPerCluster: 128,
+    nClustersByDim: [16, 9, 16],
+
+    nearPlaneZ: 0.01,
+    farPlaneZ: 25,
 };
 
 // =================================

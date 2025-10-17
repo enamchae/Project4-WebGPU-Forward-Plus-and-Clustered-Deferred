@@ -48,13 +48,13 @@ fn clusterLights(@builtin(global_invocation_id) globalId: vec3u) {
     
 
     
-    let minZ = 0.1;
-    let maxZ = 100.;
+    let minZ = f32(${nearPlaneZ});
+    let maxZ = f32(${farPlaneZ});
     let clipRange = maxZ - minZ;
     
 
-    let frustumMinZ = minZ + f32(nClusterZ) / f32(nClustersByDim.z) * clipRange;
-    let frustumMaxZ = minZ + f32(nClusterZ + 1) / f32(nClustersByDim.z) * clipRange;
+    let frustumMinZ = minZ + f32(nClusterZ) * clipRange / f32(nClustersByDim.z);
+    let frustumMaxZ = minZ + f32(nClusterZ + 1) * clipRange / f32(nClustersByDim.z);
 
     let frustumMinXyScreen = vec2f(vec2u(nClusterX, nClusterY)) * clusterSize / cameraUniforms.screenDims * 2 - 1;
     let frustumMaxXyScreen = vec2f(vec2u(nClusterX + 1, nClusterY + 1)) * clusterSize / cameraUniforms.screenDims * 2 - 1;
@@ -62,23 +62,22 @@ fn clusterLights(@builtin(global_invocation_id) globalId: vec3u) {
     let boxMin = vec3f(
         min(frustumMinXyScreen.x * frustumMinZ, frustumMinXyScreen.x * frustumMaxZ),
         min(frustumMinXyScreen.y * frustumMinZ, frustumMinXyScreen.y * frustumMaxZ),
-        -frustumMaxZ,
+        frustumMinZ,
     );
     let boxMax = vec3f(
         min(frustumMaxXyScreen.x * frustumMinZ, frustumMaxXyScreen.x * frustumMaxZ),
         min(frustumMaxXyScreen.y * frustumMinZ, frustumMaxXyScreen.y * frustumMaxZ),
-        -frustumMinZ,
+        frustumMaxZ,
     );
 
-    clusterSet.clusters[threadIndex].nLights = 0;
-    
 
     var nLights = 0u;
     for (var lightIndex = 0u; lightIndex < lightSet.numLights; lightIndex++) {
         let light = lightSet.lights[lightIndex];
         
-        let lightViewPosHom = cameraUniforms.viewProjMat * vec4f(light.pos, 1);
-        if !sphereIntersectsBox(lightViewPosHom.xyz / lightViewPosHom.w, ${lightRadius}, boxMin, boxMax) { continue; }
+        var lightViewPos = (cameraUniforms.viewMat * vec4f(light.pos, 1)).xyz;
+        lightViewPos.z *= -1;
+        if !sphereIntersectsBox(lightViewPos, ${lightRadius}, boxMin, boxMax) { continue; }
 
         clusterSet.clusters[threadIndex].lightIndices[nLights] = lightIndex;
         nLights++;

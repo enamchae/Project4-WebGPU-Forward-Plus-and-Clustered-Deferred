@@ -19,7 +19,7 @@ struct VertexOutput
     @builtin(position) fragPos: vec4f,
     @location(0) pos: vec3f,
     @location(1) nor: vec3f,
-    @location(2) uv: vec2f
+    @location(2) uv: vec2f,
 }
 
 @vertex
