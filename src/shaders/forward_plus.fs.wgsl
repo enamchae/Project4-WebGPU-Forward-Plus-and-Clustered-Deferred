@@ -34,6 +34,9 @@ struct FragmentInput
 fn main(in: FragmentInput) -> @location(0) vec4f
 {
     let diffuseColor = textureSample(diffuseTex, diffuseTexSampler, in.uv);
+    if (diffuseColor.a < 0.5f) {
+        discard;
+    }
 
 
     let viewPos = (cameraUniforms.viewMat * vec4f(in.pos, 1)).xyz;
