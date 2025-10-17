@@ -34,7 +34,7 @@ fn sphereIntersectsBox(sphereCenter: vec3f, sphereRadius: f32, boxMin: vec3f, bo
 @compute
 @workgroup_size(${clusterWorkgroupSize})
 fn clusterLights(@builtin(global_invocation_id) globalId: vec3u) {
-    let nClustersByDim = vec3u(${nClustersByDim[0]}, ${nClustersByDim[1]}, ${nClustersByDim[2]});
+    let nClustersByDim = vec3u(${nClustersX}, ${nClustersY}, ${nClustersZ});
 
     let threadIndex = globalId.x;
     if threadIndex >= nClustersByDim.x * nClustersByDim.y * nClustersByDim.z { return; }

@@ -20,7 +20,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         super(stage);
 
         // TODO-2: initialize layouts, pipelines, textures, etc. needed for Forward+ here
-        const nClusters = shaders.constants.nClustersByDim[0] * shaders.constants.nClustersByDim[1] * shaders.constants.nClustersByDim[2];
+        const nClusters = shaders.constants.nClustersX * shaders.constants.nClustersY * shaders.constants.nClustersZ;
         
         this.clusterBuffer = renderer.device.createBuffer({
             label: "clusters buffer",
@@ -144,7 +144,7 @@ export class ForwardPlusRenderer extends renderer.Renderer {
         computePass.setPipeline(this.clusterPipeline);
         computePass.setBindGroup(shaders.constants.bindGroup_scene, this.sceneUniformsBindGroup);
         
-        const totalClusters = shaders.constants.nClustersByDim[0] * shaders.constants.nClustersByDim[1] * shaders.constants.nClustersByDim[2];
+        const totalClusters = shaders.constants.nClustersX * shaders.constants.nClustersY * shaders.constants.nClustersZ;
         const workgroupCount = Math.ceil(totalClusters / shaders.constants.clusterWorkgroupSize);
         computePass.dispatchWorkgroups(workgroupCount);
 

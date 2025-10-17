@@ -41,8 +41,7 @@ fn main(in: FragmentInput) -> @location(0) vec4f
 
     // return vec4f(viewPos, 1);
 
-    let nClustersByDim = vec3u(${nClustersByDim[0]}, ${nClustersByDim[1]}, ${nClustersByDim[2]});
-
+    let nClustersByDim = vec3u(${nClustersX}, ${nClustersY}, ${nClustersZ});
 
     let minZ = f32(${nearPlaneZ});
     let maxZ = f32(${farPlaneZ});

@@ -33,7 +33,9 @@ export const constants = {
 
     lightRadius: 2,
     nMaxLightsPerCluster: 128,
-    nClustersByDim: [16, 9, 16],
+    nClustersX: 16,
+    nClustersY: 9,
+    nClustersZ: 16,
 
     nearPlaneZ: 0.01,
     farPlaneZ: 25,
@@ -44,7 +46,7 @@ export const constants = {
 // =================================
 
 function evalShaderRaw(raw: string) {
-    return eval('`' + raw.replaceAll('${', '${constants.') + '`');
+    return raw.replaceAll(/\$\{([A-Za-z0-9\-_]+)\}/g, (_, capture) => (constants as Record<string, any>)[capture]);
 }
 
 const commonSrc: string = evalShaderRaw(commonRaw);
