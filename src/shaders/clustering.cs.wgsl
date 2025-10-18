@@ -49,10 +49,10 @@ fn clusterLights(@builtin(global_invocation_id) globalId: vec3u) {
 
     let minZ = f32(${nearPlaneZ});
     let maxZ = f32(${farPlaneZ});
-    let clipRange = maxZ - minZ;
     
-    let frustumMinZ = minZ + f32(nClusterZ) * clipRange / f32(nClustersByDim.z);
-    let frustumMaxZ = minZ + f32(nClusterZ + 1) * clipRange / f32(nClustersByDim.z);
+    let logBase = maxZ / minZ;
+    let frustumMinZ = minZ * pow(logBase, f32(nClusterZ) / f32(nClustersByDim.z));
+    let frustumMaxZ = minZ * pow(logBase, f32(nClusterZ + 1) / f32(nClustersByDim.z));
 
 
 

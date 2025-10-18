@@ -57,9 +57,8 @@ fn calculateLightContrib(light: Light, posWorld: vec3f, nor: vec3f) -> vec3f {
 fn getNCluster(depth: f32, fragCoord: vec4f, screenDims: vec2f) -> vec3u {
     let minZ = f32(${nearPlaneZ});
     let maxZ = f32(${farPlaneZ});
-    let nClusterZ = u32(f32(nClustersByDim.z) * (depth - minZ) / (maxZ - minZ));
-
-
+    
+    let nClusterZ = u32(f32(nClustersByDim.z) * (log2(depth) - log2(minZ)) / (log2(maxZ) - log2(minZ)));
 
     let clusterSize = screenDims / vec2f(nClustersByDim.xy);
     return vec3u(
