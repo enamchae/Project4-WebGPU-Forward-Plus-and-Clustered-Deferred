@@ -24,7 +24,7 @@ struct FragmentInput
 fn main(in: FragmentInput) -> @location(0) vec4f {
     let uv = in.fragPos.xy / cameraUniforms.screenDims;
     let depth = textureSample(depthTexture, depthSampler, uv);
-    if depth >= 1 {
+    if depth >= 1 { // didn't hit anything
         return vec4(0, 0, 0, 1);
     }
 
